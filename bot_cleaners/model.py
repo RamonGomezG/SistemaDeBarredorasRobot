@@ -5,6 +5,7 @@ from mesa.time import SimultaneousActivation
 from mesa.datacollection import DataCollector
 
 import numpy as np
+import math
 
 
 class Celda(Agent):
@@ -24,6 +25,7 @@ class RobotLimpieza(Agent):
         self.sig_pos = None
         self.movimientos = 0
         self.carga = 100
+        self.destination = (0,0) #variable que almacenará el cargador al que se debe dirigir si su batería llega a un nivel crítico
 
     def limpiar_una_celda(self, lista_de_celdas_sucias):
         celda_a_limpiar = self.random.choice(lista_de_celdas_sucias)
@@ -45,21 +47,74 @@ class RobotLimpieza(Agent):
             if isinstance(vecino, Celda) and vecino.sucia:
                 celdas_sucias.append(vecino)
         return celdas_sucias
+    
+    @staticmethod
+    def distancia_euclidiana(punto1, punto2):
+        x1, y1 = punto1
+        x2, y2 = punto2
+        return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
+    def buscar_cargador(self, origin):
+        lista_tuplas = [(4, 4), (4, 14), (14, 4), (14, 14)] #cambiar por un arreglo de entrada para la lista de cargadores
+        minDistance = float('inf')
+        closestCharger = None
+
+        x, y = origin
+        print (x)
+        print (y)
+        # Iterar sobre la lista de tuplas
+        for tupla in lista_tuplas:
+            aux_x, aux_y = tupla
+            distancia = self.distancia_euclidiana((x, y), (aux_x, aux_y))
+            if abs(distancia) < abs(minDistance):
+                minDistance = distancia
+                closestCharger = tupla
+        #Establecemos un destino para que el robot se dirija ahi en caso de llegar a un nivel de batería crítico
+        d_x, d_y = closestCharger
+        self.destination = (d_x, d_y)
+        print(self.destination)
+
+    def ir_a_cargador(self):
+        print("LLENDO A CARGAR...")
+        x_cargador, y_cargador = self.destination
+        print(f"DESTINO: {self.destination}")
+        x, y = self.pos
+        if x < x_cargador:
+            x = x + 1
+        elif x > x_cargador:
+            x = x - 1
+        
+        if y < y_cargador:
+            y = y + 1
+        elif y > y_cargador: 
+            y = y - 1
+                
+        self.sig_pos = (x, y)
+        print(f"SIGUIENTE PASO: {self.sig_pos}")
+
+    
     def step(self):
-        vecinos = self.model.grid.get_neighbors(
-            self.pos, moore=True, include_center=False)
+        if self.carga > 30:
+            vecinos = self.model.grid.get_neighbors(
+                self.pos, moore=True, include_center=False)
 
-        for vecino in vecinos:
-            if isinstance(vecino, (Mueble, RobotLimpieza)):
-                vecinos.remove(vecino)
+            for vecino in vecinos:
+                if isinstance(vecino, (Mueble, RobotLimpieza)):
+                    vecinos.remove(vecino)
 
-        celdas_sucias = self.buscar_celdas_sucia(vecinos)
+            celdas_sucias = self.buscar_celdas_sucia(vecinos)
 
-        if len(celdas_sucias) == 0:
-            self.seleccionar_nueva_pos(vecinos)
-        else:
-            self.limpiar_una_celda(celdas_sucias)
+            if len(celdas_sucias) == 0:
+                self.seleccionar_nueva_pos(vecinos)
+            else:
+                self.limpiar_una_celda(celdas_sucias)
+        else: 
+            if self.destination == (0,0):
+                print("BATTERY RUNNING OUT!")
+                self.buscar_cargador(self.pos)
+            else: 
+                self.ir_a_cargador()
+
 
     def advance(self):
         # En caso de querer meter una negociación con otros agentes, se debería de colocar aqui
