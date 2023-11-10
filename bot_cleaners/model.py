@@ -6,6 +6,7 @@ from mesa.datacollection import DataCollector
 
 import numpy as np
 import math
+import uuid
 
 
 class Celda(Agent):
@@ -17,6 +18,20 @@ class Celda(Agent):
 class Mueble(Agent):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
+
+
+# Agente cargador
+class Cargador(Agent):
+    def __init__(self, unique_id, model):
+        super().__init__(unique_id, model)
+        self.carga = 100
+
+    def posCargador(M, N, num_cuadrantes_x, num_cuadrantes_y, i, j):
+        tamañoM = M // num_cuadrantes_x
+        tamañoN = N // num_cuadrantes_y
+        pos_x = tamañoM * i + tamañoM // 2
+        pos_y = tamañoN * j + tamañoN // 2
+        return pos_x, pos_y
 
 
 class RobotLimpieza(Agent):
@@ -132,11 +147,15 @@ class Habitacion(Model):
                  porc_celdas_sucias: float = 0.6,
                  porc_muebles: float = 0.1,
                  modo_pos_inicial: str = 'Fija',
+                 num_cuadrantesX: int = 2, 
+                 num_cuadrantesY: int = 2
                  ):
 
         self.num_agentes = num_agentes
         self.porc_celdas_sucias = porc_celdas_sucias
         self.porc_muebles = porc_muebles
+        self.num_cuadrantesX = num_cuadrantesX
+        self.num_cuadrantesY = num_cuadrantesY
 
         self.grid = MultiGrid(M, N, False) #multigrid permite que haya varios agentes en la misma celda 
         self.schedule = SimultaneousActivation(self)
@@ -177,6 +196,14 @@ class Habitacion(Model):
             model_reporters={"Grid": get_grid, "Cargas": get_cargas,
                              "CeldasSucias": get_sucias},
         )
+
+        # Posicionamiento de cargadores
+        for i in range(num_cuadrantesX):
+            for j in range(num_cuadrantesY):
+                pos_x, pos_y = Cargador.posCargador(M, N, num_cuadrantesX, num_cuadrantesY, i, j)
+                cargador = Cargador(f"{i * num_cuadrantesY + j}", self)
+                self.schedule.add(cargador)
+                self.grid.place_agent(cargador, (pos_x, pos_y))
 
     def step(self):
         self.datacollector.collect(self)
