@@ -70,20 +70,20 @@ class RobotLimpieza(Agent):
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
     def buscar_cargador(self, origin):
-        lista_tuplas = [(4, 4), (4, 14), (14, 4), (14, 14)] #cambiar por un arreglo de entrada para la lista de cargadores
+        lista_cargadores = [agent for agent in self.model.schedule.agents if isinstance(agent, Cargador)] #Arreglo de entrada para la lista de cargadores
         minDistance = float('inf')
         closestCharger = None
 
         x, y = origin
         print (x)
         print (y)
-        # Iterar sobre la lista de tuplas
-        for tupla in lista_tuplas:
-            aux_x, aux_y = tupla
-            distancia = self.distancia_euclidiana((x, y), (aux_x, aux_y))
+        # Iterar sobre la lista de cargadores
+        for cargadores in lista_cargadores:
+            cargador_pos = cargadores.pos
+            distancia = self.distancia_euclidiana((x, y), cargador_pos)
             if abs(distancia) < abs(minDistance):
                 minDistance = distancia
-                closestCharger = tupla
+                closestCharger = cargador_pos
         #Establecemos un destino para que el robot se dirija ahi en caso de llegar a un nivel de batería crítico
         d_x, d_y = closestCharger
         self.destination = (d_x, d_y)
