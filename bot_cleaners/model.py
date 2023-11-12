@@ -13,18 +13,20 @@ class Celda(Agent):
     def __init__(self, unique_id, model, suciedad: bool = False):
         super().__init__(unique_id, model)
         self.sucia = suciedad
+        self.ocupada = False
 
 
 class Mueble(Agent):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
-
+        self.ocupada = True
 
 # Agente cargador
 class Cargador(Agent):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
         self.carga = 100
+        self.ocupada = False
 
     def posCargador(M, N, num_cuadrantes_x, num_cuadrantes_y, i, j):
         tamañoM = M // num_cuadrantes_x
@@ -32,14 +34,21 @@ class Cargador(Agent):
         pos_x = tamañoM * i + tamañoM // 2
         pos_y = tamañoN * j + tamañoN // 2
         return pos_x, pos_y
+    
+    def set_ocupada(self, value):
+        self.ocupada = value
 
 
 class RobotLimpieza(Agent):
     def __init__(self, unique_id, model):
         super().__init__(unique_id, model)
+        self.ocupada = True
         self.sig_pos = None
         self.movimientos = 0
         self.carga = 100
+        self.carga_optima = True 
+        self.esta_cargando = False
+        self.esta_esperando = False
         self.destination = (0,0) #variable que almacenará el cargador al que se debe dirigir si su batería llega a un nivel crítico
 
     def limpiar_una_celda(self, lista_de_celdas_sucias):
@@ -49,7 +58,10 @@ class RobotLimpieza(Agent):
     
     # cuando no tiene una celda sucia cerca se mueve de manera aleatoria (?)
     def seleccionar_nueva_pos(self, lista_de_vecinos):
-        self.sig_pos = self.random.choice(lista_de_vecinos).pos
+        possible_pos = self.random.choice(lista_de_vecinos)
+        while possible_pos.ocupada == True: # aqui nos aseguramos que al buscar una posición random no tome alguna ya ocupada
+            possible_pos = self.random.choice(lista_de_vecinos)
+        self.sig_pos = possible_pos.pos
 
     @staticmethod
     def buscar_celdas_sucia(lista_de_vecinos):
@@ -70,27 +82,36 @@ class RobotLimpieza(Agent):
         return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
     def buscar_cargador(self, origin):
+        lista_cargadores = list()
         lista_cargadores = [agent for agent in self.model.schedule.agents if isinstance(agent, Cargador)] #Arreglo de entrada para la lista de cargadores
         minDistance = float('inf')
         closestCharger = None
-
+        cargador_destino = None
         x, y = origin
-        print (x)
-        print (y)
         # Iterar sobre la lista de cargadores
-        for cargadores in lista_cargadores:
-            cargador_pos = cargadores.pos
+        for cargador in lista_cargadores:
+            cargador_pos = cargador.pos
+            print(cargador.ocupada)
             distancia = self.distancia_euclidiana((x, y), cargador_pos)
-            if abs(distancia) < abs(minDistance):
+            if abs(distancia) < abs(minDistance) and cargador.ocupada == False:
                 minDistance = distancia
                 closestCharger = cargador_pos
-        #Establecemos un destino para que el robot se dirija ahi en caso de llegar a un nivel de batería crítico
-        d_x, d_y = closestCharger
-        self.destination = (d_x, d_y)
-        print(self.destination)
+                cargador_destino = cargador
+                d_x, d_y = closestCharger
+                
+        if cargador_destino != None:
+            self.destination = (d_x, d_y)#Establecemos un destino para que el robot se dirija ahi
+            cargador_destino.set_ocupada(True)
+            self.esta_esperando = False
+        # Si no encuentra cargador desocupado se detiene y entra en estado de espera
+        if self.destination == (0, 0):
+            self.esta_esperando = True
+        # print(self.destination)
+
 
     def ir_a_cargador(self):
-        print("LLENDO A CARGAR...")
+        # cambiarlo a que dentro de sus vecinos escoja la celda desocupada más cercana al cargador y se dirija hacia alla
+        print("YENDO A CARGAR...")
         x_cargador, y_cargador = self.destination
         print(f"DESTINO: {self.destination}")
         x, y = self.pos
@@ -105,11 +126,38 @@ class RobotLimpieza(Agent):
             y = y - 1
                 
         self.sig_pos = (x, y)
-        print(f"SIGUIENTE PASO: {self.sig_pos}")
-
+        # print(f"SIGUIENTE PASO: {self.sig_pos}")
     
+    def agentes_en_posicion(self, x, y):
+        cell_contents = self.model.grid.get_cell_list_contents((x, y))
+        return cell_contents
+    
+    def cargar_bateria(self):
+        if self.carga > 90:
+            x, y = self.pos  # Obtén la posición del agente principal
+            celdas = self.model.grid.get_cell_list_contents([(x, y)])
+            for contenido in celdas:
+                if isinstance(contenido, Cargador):
+                    # Modifica el atributo "ocupada" del Cargador
+                    contenido.set_ocupada(False)
+                    print(f"Se modificó 'ocupada' del Cargador en la posición {contenido.pos} a False")
+                    
+            self.carga_optima = True
+            self.destination = (0,0)
+            x, y = self.pos
+            # agentes_en_celda = self.agentes_en_posicion(x, y)
+            # cargador = [agent for agent in agentes_en_celda if isinstance(agent, Cargador)]
+            # cargador[0].ocupada = False;    
+        elif self.carga + 25 > 100:
+            self.carga += 100 - self.carga
+        else: 
+            self.carga += 25
+        
+            
+
     def step(self):
-        if self.carga > 30:
+        if self.carga > 25 and self.carga_optima:
+            self.esta_cargando = False
             vecinos = self.model.grid.get_neighbors(
                 self.pos, moore=True, include_center=False)
 
@@ -124,11 +172,15 @@ class RobotLimpieza(Agent):
             else:
                 self.limpiar_una_celda(celdas_sucias)
         else: 
+            self.carga_optima = False
             if self.destination == (0,0):
                 print("BATTERY RUNNING OUT!")
                 self.buscar_cargador(self.pos)
-            else: 
+            elif self.destination != (0,0) and self.pos != self.destination: 
                 self.ir_a_cargador()
+            else:
+                self.esta_cargando = True
+                self.cargar_bateria()
 
 
     def advance(self):
@@ -137,7 +189,8 @@ class RobotLimpieza(Agent):
             self.movimientos += 1
 
         if self.carga > 0:
-            self.carga -= 1
+            if self.esta_cargando == False and self.esta_esperando == False:
+                self.carga -= 1
             self.model.grid.move_agent(self, self.sig_pos)
 
 
