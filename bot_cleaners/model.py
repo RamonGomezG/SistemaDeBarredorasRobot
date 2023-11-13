@@ -43,6 +43,7 @@ class RobotLimpieza(Agent):
         self.sig_pos = None
         self.movimientos = 0
         self.carga = 100
+        self.recarga = 0
         self.carga_optima = True 
         self.esta_cargando = False
         self.esta_esperando = False
@@ -193,6 +194,8 @@ class RobotLimpieza(Agent):
             else:
                 self.esta_cargando = True
                 self.cargar_bateria()
+                self.recarga += 1
+                print(f"Cantidad de recargas: {self.recarga}")
 
 
     def advance(self):
@@ -212,6 +215,7 @@ class Habitacion(Model):
                  porc_celdas_sucias: float = 0.6,
                  porc_muebles: float = 0.1,
                  modo_pos_inicial: str = 'Fija',
+                 time: int = 0,
                  num_cuadrantesX: int = 2, 
                  num_cuadrantesY: int = 2
                  ):
@@ -221,6 +225,7 @@ class Habitacion(Model):
         self.porc_muebles = porc_muebles
         self.num_cuadrantesX = num_cuadrantesX
         self.num_cuadrantesY = num_cuadrantesY
+        self.time = time
 
         self.grid = MultiGrid(M, N, False) #multigrid permite que haya varios agentes en la misma celda 
         self.schedule = SimultaneousActivation(self)
@@ -274,10 +279,12 @@ class Habitacion(Model):
         if self.todoLimpio():
             self.running = False  
             print("Todas las celdas se encuentran limpias, deteniendo simulación")
+            print(f"Tiempo total de simulación: {self.time} segundos")
             print(f"Número de movimientos realizados por todos los agentes: {self.schedule.steps}")
         else: 
             self.datacollector.collect(self)
             self.schedule.step()
+            self.time += 1
 
     def todoLimpio(self):
         for (content, pos) in self.grid.coord_iter():
