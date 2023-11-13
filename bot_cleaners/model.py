@@ -114,18 +114,34 @@ class RobotLimpieza(Agent):
         print("YENDO A CARGAR...")
         x_cargador, y_cargador = self.destination
         print(f"DESTINO: {self.destination}")
-        x, y = self.pos
-        if x < x_cargador:
-            x = x + 1
-        elif x > x_cargador:
-            x = x - 1
+        # x, y = self.pos
+        # if x < x_cargador:
+        #     x = x + 1
+        # elif x > x_cargador:
+        #     x = x - 1
         
-        if y < y_cargador:
-            y = y + 1
-        elif y > y_cargador: 
-            y = y - 1
+        # if y < y_cargador:
+        #     y = y + 1
+        # elif y > y_cargador: 
+        #     y = y - 1
                 
-        self.sig_pos = (x, y)
+        # self.sig_pos = (x, y)
+        # Dirigirse al cargador considerando al entorno
+        vecinos = self.model.grid.get_neighbors(
+                self.pos, moore=True, include_center=False)
+
+        for vecino in vecinos:
+            if isinstance(vecino, (Mueble, RobotLimpieza)):
+                vecinos.remove(vecino)
+        celdas = list()
+        minDist = float('inf')
+        for vecino in vecinos:
+            dist = self.distancia_euclidiana(vecino.pos, self.destination)
+            if dist < minDist:
+                minDist = dist
+                self.sig_pos = vecino.pos
+        
+
         # print(f"SIGUIENTE PASO: {self.sig_pos}")
     
     def agentes_en_posicion(self, x, y):
