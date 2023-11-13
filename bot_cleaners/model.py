@@ -7,13 +7,11 @@ from mesa.datacollection import DataCollector
 import numpy as np
 import math
 
-
 class Celda(Agent):
     def __init__(self, unique_id, model, suciedad: bool = False):
         super().__init__(unique_id, model)
         self.sucia = suciedad
         self.ocupada = False
-
 
 class Mueble(Agent):
     def __init__(self, unique_id, model):
@@ -27,11 +25,11 @@ class Cargador(Agent):
         self.carga = 100
         self.ocupada = False
 
-    def posCargador(M, N, num_cuadrantes_x, num_cuadrantes_y, i, j):
-        tamañoM = M // num_cuadrantes_x
-        tamañoN = N // num_cuadrantes_y
-        pos_x = tamañoM * i + tamañoM // 2
-        pos_y = tamañoN * j + tamañoN // 2
+    def pos_cargador(M, N, num_cuadrantes_x, num_cuadrantes_y, i, j):
+        tamaño_m = M // num_cuadrantes_x
+        tamaño_n = N // num_cuadrantes_y
+        pos_x = tamaño_m * i + tamaño_m // 2
+        pos_y = tamaño_n * j + tamaño_n // 2
         return pos_x, pos_y
     
     def set_ocupada(self, value):
@@ -169,7 +167,6 @@ class RobotLimpieza(Agent):
             self.carga += 25
         
             
-
     def step(self):
         if self.carga > 25 and self.carga_optima:
             self.esta_cargando = False
@@ -268,18 +265,22 @@ class Habitacion(Model):
         # Posicionamiento de cargadores
         for i in range(num_cuadrantesX):
             for j in range(num_cuadrantesY):
-                pos_x, pos_y = Cargador.posCargador(M, N, num_cuadrantesX, num_cuadrantesY, i, j)
+                pos_x, pos_y = Cargador.pos_cargador(M, N, num_cuadrantesX, num_cuadrantesY, i, j)
                 cargador = Cargador(f"{i * num_cuadrantesY + j}", self)
                 self.schedule.add(cargador)
                 self.grid.place_agent(cargador, (pos_x, pos_y))
 
     def step(self):
-        self.datacollector.collect(self)
-
-        self.schedule.step()
+        if self.todoLimpio():
+            self.running = False  
+            print("Todas las celdas se encuentran limpias, deteniendo simulación")
+            print(f"Número de movimientos realizados por todos los agentes: {self.schedule.steps}")
+        else: 
+            self.datacollector.collect(self)
+            self.schedule.step()
 
     def todoLimpio(self):
-        for (content, x, y) in self.grid.coord_iter():
+        for (content, pos) in self.grid.coord_iter():
             for obj in content:
                 if isinstance(obj, Celda) and obj.sucia:
                     return False
