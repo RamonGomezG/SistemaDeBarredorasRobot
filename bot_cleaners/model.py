@@ -6,7 +6,6 @@ from mesa.datacollection import DataCollector
 
 import numpy as np
 import math
-import uuid
 
 
 class Celda(Agent):
