@@ -42,7 +42,9 @@ class RobotLimpieza(Agent):
         self.ocupada = True
         self.sig_pos = None
         self.movimientos = 0
+        self.movimientos_totales = 0
         self.carga = 100
+        self.tiempo = 0
         self.recarga = 0
         self.carga_optima = True 
         self.esta_cargando = False
@@ -158,6 +160,7 @@ class RobotLimpieza(Agent):
                     
             self.carga_optima = True
             self.destination = (0,0)
+            self.model.total_recargas += 1
             x, y = self.pos
             # agentes_en_celda = self.agentes_en_posicion(x, y)
             # cargador = [agent for agent in agentes_en_celda if isinstance(agent, Cargador)]
@@ -194,14 +197,13 @@ class RobotLimpieza(Agent):
             else:
                 self.esta_cargando = True
                 self.cargar_bateria()
-                self.recarga += 1
-                print(f"Cantidad de recargas: {self.recarga}")
 
 
     def advance(self):
         # En caso de querer meter una negociación con otros agentes, se debería de colocar aqui
         if self.pos != self.sig_pos:
             self.movimientos += 1
+            self.movimientos_totales += 1
 
         if self.carga > 0:
             if self.esta_cargando == False and self.esta_esperando == False:
@@ -215,7 +217,7 @@ class Habitacion(Model):
                  porc_celdas_sucias: float = 0.6,
                  porc_muebles: float = 0.1,
                  modo_pos_inicial: str = 'Fija',
-                 time: int = 0,
+                 total_recargas: int = 0,
                  num_cuadrantesX: int = 2, 
                  num_cuadrantesY: int = 2
                  ):
@@ -225,7 +227,7 @@ class Habitacion(Model):
         self.porc_muebles = porc_muebles
         self.num_cuadrantesX = num_cuadrantesX
         self.num_cuadrantesY = num_cuadrantesY
-        self.time = time
+        self.total_recargas = total_recargas
 
         self.grid = MultiGrid(M, N, False) #multigrid permite que haya varios agentes en la misma celda 
         self.schedule = SimultaneousActivation(self)
@@ -267,6 +269,14 @@ class Habitacion(Model):
                              "CeldasSucias": get_sucias},
         )
 
+        self.datacollectorMovimientosTiempo = DataCollector(
+            model_reporters={"Grid": get_grid, "Tiempo": get_tiempo, "Movimientos": get_movimientos_totales},
+        )
+
+        self.datacollectorRecargasTiempo = DataCollector(
+            model_reporters={"Grid": get_grid, "Tiempo": get_tiempo, "Recargas": get_recargas},
+        )
+
         # Posicionamiento de cargadores
         for i in range(num_cuadrantesX):
             for j in range(num_cuadrantesY):
@@ -279,12 +289,12 @@ class Habitacion(Model):
         if self.todoLimpio():
             self.running = False  
             print("Todas las celdas se encuentran limpias, deteniendo simulación")
-            print(f"Tiempo total de simulación: {self.time} segundos")
-            print(f"Número de movimientos realizados por todos los agentes: {self.schedule.steps}")
+            print(f"Tiempo necesario hasta que todas las celdas estén limpias: {self.schedule.steps} segundos")
         else: 
-            self.datacollector.collect(self)
             self.schedule.step()
-            self.time += 1
+            self.datacollector.collect(self)
+            self.datacollectorMovimientosTiempo.collect(self)
+            self.datacollectorRecargasTiempo.collect(self)
 
     def todoLimpio(self):
         for (content, pos) in self.grid.coord_iter():
@@ -292,7 +302,7 @@ class Habitacion(Model):
                 if isinstance(obj, Celda) and obj.sucia:
                     return False
         return True
-
+    
 
 def get_grid(model: Model) -> np.ndarray:
     """
@@ -311,10 +321,8 @@ def get_grid(model: Model) -> np.ndarray:
                 grid[x][y] = int(obj.sucia)
     return grid
 
-
 def get_cargas(model: Model):
     return [(agent.unique_id, agent.carga) for agent in model.schedule.agents]
-
 
 def get_sucias(model: Model) -> int:
     """
@@ -330,9 +338,18 @@ def get_sucias(model: Model) -> int:
                 sum_sucias += 1
     return sum_sucias / model.num_celdas_sucias
 
-
 def get_movimientos(agent: Agent) -> dict:
     if isinstance(agent, RobotLimpieza):
         return {agent.unique_id: agent.movimientos}
     # else:
     #    return 0
+
+def get_movimientos_totales(self):
+    total_movimientos = sum(agent.movimientos_totales for agent in self.schedule.agents if isinstance(agent, RobotLimpieza))
+    return total_movimientos 
+
+def get_tiempo(model: Model):
+    return model.schedule.steps
+
+def get_recargas(self):
+    return self.total_recargas

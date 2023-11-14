@@ -36,6 +36,16 @@ chart_celdas = mesa.visualization.ChartModule(
     data_collector_name="datacollector"
 )
 
+chart_movimientos = mesa.visualization.ChartModule(
+    [{"Label": "Movimientos", "Color": '#FF8000', "label": "Movimientos"}],
+    50, 200, data_collector_name="datacollectorMovimientosTiempo"
+)
+
+chart_recargas = mesa.visualization.ChartModule(
+    [{"Label": "Recargas", "Color": '#008000', "label": "Recargas"}],
+    50, 200, data_collector_name="datacollectorRecargasTiempo"
+)
+
 model_params = {
     "num_agentes": mesa.visualization.Slider(
         "Número de Robots",
@@ -72,6 +82,6 @@ model_params = {
 }
 
 server = mesa.visualization.ModularServer(
-    Habitacion, [grid, chart_celdas],
+    Habitacion, [grid, chart_celdas, chart_movimientos, chart_recargas],
     "botCleaner", model_params, 8521
 )
